@@ -23,7 +23,7 @@
   <!-- 來源模式 -->
   <div class="bg-white rounded shadow p-4 mb-4">
     <div class="font-semibold mb-2">選擇來源</div>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="radiogroup" aria-label="來源模式">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2" role="radiogroup" aria-label="來源模式">
       <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
         <input type="radio" name="source" value="youtube" checked class="accent-blue-600" />
         <span class="text-sm">YouTube 網址</span>
@@ -39,6 +39,10 @@
       <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
         <input type="radio" name="source" value="system" class="accent-blue-600" />
         <span class="text-sm">電腦播放聲音</span>
+      </label>
+      <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="source" value="mic" class="accent-blue-600" />
+        <span class="text-sm">麥克風錄音</span>
       </label>
     </div>
 
@@ -73,6 +77,16 @@
         <button id="reloadDevices" type="button" class="text-sm border rounded px-3 py-2 hover:bg-slate-50">重新整理</button>
       </div>
       <p class="text-xs text-slate-500 mt-1">擷取該輸出裝置的混合聲音，不支援單一分頁隔離。此模式不使用擷取時間區間。</p>
+    </div>
+
+    <!-- Microphone -->
+    <div id="panel-mic" class="mt-4 hidden">
+      <label class="block text-sm font-medium mb-1" for="micDevice">麥克風輸入裝置</label>
+      <div class="flex gap-2">
+        <select id="micDevice" class="flex-1 border rounded px-3 py-2 text-sm bg-white"></select>
+        <button id="reloadMicDevices" type="button" class="text-sm border rounded px-3 py-2 hover:bg-slate-50">重新整理</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">即時錄製所選麥克風的聲音並轉錄。此模式不使用擷取時間區間。</p>
     </div>
 
     <!-- H:M range -->
@@ -182,9 +196,11 @@ function switchMode(mode) {
   $('panel-video').classList.toggle('hidden', mode !== 'video');
   $('panel-audio').classList.toggle('hidden', mode !== 'audio');
   $('panel-system').classList.toggle('hidden', mode !== 'system');
-  // 系統音訊隱藏 H:M
-  $('rangeBox').classList.toggle('hidden', mode === 'system');
+  $('panel-mic').classList.toggle('hidden', mode !== 'mic');
+  // Live 模式（系統音訊 / 麥克風）隱藏 H:M
+  $('rangeBox').classList.toggle('hidden', mode === 'system' || mode === 'mic');
   if (mode === 'system') loadDevices();
+  if (mode === 'mic') loadMicDevices();
 }
 
 async function loadDevices() {
@@ -213,6 +229,35 @@ async function loadDevices() {
     o.value = ''; o.textContent = '（讀取裝置失敗）';
     sel.appendChild(o);
     showError(e.message || 'system_audio_unsupported');
+  }
+}
+
+async function loadMicDevices() {
+  const sel = $('micDevice');
+  try {
+    const res = await fetch('/api/microphone/devices');
+    if (!res.ok) throw new Error('device_list_failed: HTTP ' + res.status);
+    const data = await res.json();
+    const list = data.devices || data || [];
+    sel.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0) {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = '（無可用麥克風裝置）';
+      sel.appendChild(o);
+      return;
+    }
+    for (const d of list) {
+      const o = document.createElement('option');
+      o.value = String(d.id ?? d.index ?? '');
+      o.textContent = (d.name || ('裝置 ' + o.value)) + ' [' + (d.sample_rate || '') + 'Hz]';
+      sel.appendChild(o);
+    }
+  } catch (e) {
+    sel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '（讀取裝置失敗）';
+    sel.appendChild(o);
+    showError(e.message || 'microphone_unsupported');
   }
 }
 
@@ -264,9 +309,12 @@ async function startJob() {
       const res = await fetch('/api/jobs/audio', { method: 'POST', body: fd });
       data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
-    } else {
+    } else if (state.mode === 'system') {
       const v = $('sysDevice').value;
       data = await postJSON('/api/jobs/system-audio', { device_id: v === '' ? null : Number(v) });
+    } else {
+      const v = $('micDevice').value;
+      data = await postJSON('/api/jobs/microphone', { device_id: v === '' ? null : Number(v) });
     }
   } catch (e) {
     state.busy = false; setControls('idle'); setBadge('idle');
@@ -358,6 +406,7 @@ document.querySelectorAll('input[name="source"]').forEach((r) => {
 $('startBtn').addEventListener('click', startJob);
 $('stopBtn').addEventListener('click', stopJob);
 $('reloadDevices').addEventListener('click', loadDevices);
+$('reloadMicDevices').addEventListener('click', loadMicDevices);
 $('dlTxt').addEventListener('click', () => download('transcript.txt', buildTxt(state.segments)));
 $('dlVtt').addEventListener('click', () => download('transcript.vtt', buildVtt(state.segments)));
 $('dlSrt').addEventListener('click', () => download('transcript.srt', buildSrt(state.segments)));

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.routers import audio, jobs, system_audio, ui, video, youtube
+from app.routers import audio, jobs, microphone, system_audio, ui, video, youtube
 from app.services.errors import register_exception_handlers
 
 app = FastAPI(title="Tiger-You-VTT", version="0.1.0")
@@ -21,5 +21,6 @@ app.include_router(youtube.router)
 app.include_router(video.router)
 app.include_router(audio.router)
 app.include_router(system_audio.router)
+app.include_router(microphone.router)
 app.include_router(jobs.router)
 app.include_router(ui.router)

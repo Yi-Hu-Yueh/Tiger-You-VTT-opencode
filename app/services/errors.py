@@ -51,6 +51,10 @@ ERROR_STATUS_MAP: dict[str, int] = {
     "system_audio_device_not_found": 404,
     "system_audio_device_invalid": 400,
     "system_audio_capture_failed": 500,
+    "microphone_unsupported": 400,
+    "microphone_device_not_found": 404,
+    "microphone_device_invalid": 400,
+    "microphone_capture_failed": 500,
     "range_clip_failed": 500,
 }
 
