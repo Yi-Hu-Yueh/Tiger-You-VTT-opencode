@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tiger-You-VTT 本機字幕工具</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+<div class="max-w-3xl mx-auto p-4 sm:p-6">
+
+  <header class="mb-4">
+    <h1 class="text-2xl font-bold">Tiger-You-VTT</h1>
+    <p class="text-sm text-slate-600">YouTube / 本機影片 / 語音檔 / 電腦播放聲音字幕擷取（本機處理）</p>
+  </header>
+
+  <!-- 錯誤提示 -->
+  <div id="errorBox" class="hidden mb-4 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm font-medium flex items-start justify-between gap-2">
+    <span id="errorText" class="flex-1"></span>
+    <button id="errorClose" type="button" aria-label="關閉錯誤訊息" class="shrink-0 px-2 py-0.5 rounded border border-red-300 hover:bg-red-100 font-bold">X</button>
+  </div>
+
+  <!-- 來源模式 -->
+  <div class="bg-white rounded shadow p-4 mb-4">
+    <div class="font-semibold mb-2">選擇來源</div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="radiogroup" aria-label="來源模式">
+      <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="source" value="youtube" checked class="accent-blue-600" />
+        <span class="text-sm">YouTube 網址</span>
+      </label>
+      <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="source" value="video" class="accent-blue-600" />
+        <span class="text-sm">上傳影片</span>
+      </label>
+      <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="source" value="audio" class="accent-blue-600" />
+        <span class="text-sm">上傳語音檔</span>
+      </label>
+      <label class="flex items-center gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="source" value="system" class="accent-blue-600" />
+        <span class="text-sm">電腦播放聲音</span>
+      </label>
+    </div>
+
+    <!-- YouTube -->
+    <div id="panel-youtube" class="mt-4">
+      <label class="block text-sm font-medium mb-1" for="ytUrl">YouTube 網址</label>
+      <input id="ytUrl" type="url" placeholder="https://www.youtube.com/watch?v=..."
+        class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+
+    <!-- Video -->
+    <div id="panel-video" class="mt-4 hidden">
+      <label class="block text-sm font-medium mb-1" for="videoFile">上傳影片</label>
+      <input id="videoFile" type="file" accept=".mp4,.mov,.mkv,.avi,.webm,.flv,.wmv,.mpeg,.mpg"
+        class="w-full text-sm border rounded px-3 py-2 bg-white" />
+      <p class="text-xs text-slate-500 mt-1">支援 .mp4 .mov .mkv .avi .webm .flv .wmv .mpeg .mpg</p>
+    </div>
+
+    <!-- Audio -->
+    <div id="panel-audio" class="mt-4 hidden">
+      <label class="block text-sm font-medium mb-1" for="audioFile">上傳語音檔</label>
+      <input id="audioFile" type="file" accept=".mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.wma"
+        class="w-full text-sm border rounded px-3 py-2 bg-white" />
+      <p class="text-xs text-slate-500 mt-1">支援 .mp3 .wav .m4a .aac .flac .ogg .opus .wma</p>
+    </div>
+
+    <!-- System audio -->
+    <div id="panel-system" class="mt-4 hidden">
+      <label class="block text-sm font-medium mb-1" for="sysDevice">音訊輸出裝置（WASAPI Loopback）</label>
+      <div class="flex gap-2">
+        <select id="sysDevice" class="flex-1 border rounded px-3 py-2 text-sm bg-white"></select>
+        <button id="reloadDevices" type="button" class="text-sm border rounded px-3 py-2 hover:bg-slate-50">重新整理</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">擷取該輸出裝置的混合聲音，不支援單一分頁隔離。此模式不使用擷取時間區間。</p>
+    </div>
+
+    <!-- H:M range -->
+    <div id="rangeBox" class="mt-4 grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium mb-1" for="startTime">擷取開始時間 (H:M)</label>
+        <input id="startTime" type="text" value="0:0" placeholder="空白=從頭開始"
+          class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" for="endTime">擷取結束時間 (H:M)</label>
+        <input id="endTime" type="text" value="0:10" placeholder="空白=到媒體結束"
+          class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+    </div>
+  </div>
+
+  <!-- 控制 -->
+  <div class="bg-white rounded shadow p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <button id="startBtn" type="button"
+        class="px-4 py-2 rounded bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">開始取得字幕</button>
+      <button id="stopBtn" type="button" disabled
+        class="px-4 py-2 rounded bg-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-300 disabled:opacity-40 disabled:cursor-not-allowed">停止</button>
+      <span id="statusBadge" class="text-xs font-bold px-2 py-1 rounded bg-slate-200 text-slate-700">idle</span>
+      <span class="text-sm text-slate-600">執行所耗時間：<span id="elapsed" class="font-mono font-semibold">00:00:00</span></span>
+      <span class="text-sm text-slate-600">片段數：<span id="segCount" class="font-mono font-semibold">0</span></span>
+    </div>
+  </div>
+
+  <!-- 結果 -->
+  <div class="bg-white rounded shadow p-4 mb-4">
+    <div class="font-semibold mb-2 text-sm">目前已取得字幕</div>
+    <textarea id="output" rows="10" readonly placeholder="尚未取得字幕…"
+      class="w-full border rounded px-3 py-2 text-sm font-mono bg-slate-50"></textarea>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button id="dlTxt" type="button" disabled class="px-3 py-2 text-sm rounded border hover:bg-slate-50 disabled:opacity-40">下載 TXT</button>
+      <button id="dlVtt" type="button" disabled class="px-3 py-2 text-sm rounded border hover:bg-slate-50 disabled:opacity-40">下載 VTT</button>
+      <button id="dlSrt" type="button" disabled class="px-3 py-2 text-sm rounded border hover:bg-slate-50 disabled:opacity-40">下載 SRT</button>
+    </div>
+  </div>
+
+  <footer class="text-xs text-slate-500">本機處理為主；系統音訊為 Windows WASAPI Loopback 專用。STOP 為協同中斷，於安全字幕邊界生效。</footer>
+</div>
+
+<script>
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const state = { mode: 'youtube', jobId: null, timer: null, segments: [], busy: false };
+
+const BADGE = {
+  idle: ['bg-slate-200', 'text-slate-700'],
+  queued: ['bg-slate-200', 'text-slate-700'],
+  running: ['bg-blue-100', 'text-blue-700'],
+  stopping: ['bg-yellow-100', 'text-yellow-800', 'animate-pulse'],
+  completed: ['bg-green-100', 'text-green-700'],
+  stopped: ['bg-yellow-100', 'text-yellow-800'],
+  failed: ['bg-red-100', 'text-red-700'],
+};
+
+function showError(msg) {
+  const box = $('errorBox');
+  const txt = $('errorText');
+  if (!msg) { box.classList.add('hidden'); txt.textContent = ''; return; }
+  txt.textContent = String(msg);
+  box.classList.remove('hidden');
+  box.classList.add('flex');
+}
+function hideError() {
+  $('errorBox').classList.add('hidden');
+  $('errorBox').classList.remove('flex');
+  $('errorText').textContent = '';
+}
+
+function setBadge(status) {
+  const el = $('statusBadge');
+  el.textContent = status;
+  el.className = 'text-xs font-bold px-2 py-1 rounded ' + (BADGE[status] || BADGE.idle).join(' ');
+}
+
+function formatElapsed(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n, l = 2) => String(n).padStart(l, '0');
+  return pad(h) + ':' + pad(m) + ':' + pad(s);
+}
+
+function setControls(status) {
+  const active = (status === 'queued' || status === 'running' || status === 'stopping');
+  $('startBtn').disabled = active || state.busy;
+  $('stopBtn').disabled = !active;
+  $('stopBtn').textContent = status === 'stopping' ? '正在停止...' : '停止';
+}
+
+function setDownloadsEnabled(enabled) {
+  $('dlTxt').disabled = !enabled;
+  $('dlVtt').disabled = !enabled;
+  $('dlSrt').disabled = !enabled;
+}
+
+function switchMode(mode) {
+  state.mode = mode;
+  $('panel-youtube').classList.toggle('hidden', mode !== 'youtube');
+  $('panel-video').classList.toggle('hidden', mode !== 'video');
+  $('panel-audio').classList.toggle('hidden', mode !== 'audio');
+  $('panel-system').classList.toggle('hidden', mode !== 'system');
+  // 系統音訊隱藏 H:M
+  $('rangeBox').classList.toggle('hidden', mode === 'system');
+  if (mode === 'system') loadDevices();
+}
+
+async function loadDevices() {
+  const sel = $('sysDevice');
+  try {
+    const res = await fetch('/api/system-audio/devices');
+    if (!res.ok) throw new Error('device_list_failed: HTTP ' + res.status);
+    const data = await res.json();
+    const list = data.devices || data || [];
+    sel.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0) {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = '（無可用 Loopback 裝置）';
+      sel.appendChild(o);
+      return;
+    }
+    for (const d of list) {
+      const o = document.createElement('option');
+      o.value = String(d.id ?? d.index ?? '');
+      o.textContent = (d.name || ('裝置 ' + o.value)) + ' [' + (d.sample_rate || '') + 'Hz]';
+      sel.appendChild(o);
+    }
+  } catch (e) {
+    sel.innerHTML = '';
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '（讀取裝置失敗）';
+    sel.appendChild(o);
+    showError(e.message || 'system_audio_unsupported');
+  }
+}
+
+function currentRange() {
+  return { start: $('startTime').value.trim(), end: $('endTime').value.trim() };
+}
+
+async function postJSON(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || data.detail || ('HTTP ' + res.status));
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function startJob() {
+  showError('');
+  if (state.timer) { clearInterval(state.timer); state.timer = null; }
+  state.segments = [];
+  $('output').value = '';
+  $('output').placeholder = '';
+  $('segCount').textContent = '0';
+  $('elapsed').textContent = '00:00:00';
+  setDownloadsEnabled(false);
+
+  const { start, end } = currentRange();
+  let data;
+  try {
+    state.busy = true; setControls('queued');
+    if (state.mode === 'youtube') {
+      const url = $('ytUrl').value.trim();
+      if (!url) throw new Error('請輸入 YouTube 網址');
+      data = await postJSON('/api/jobs/youtube', { url, start_time: start, end_time: end });
+    } else if (state.mode === 'video') {
+      const f = $('videoFile').files[0];
+      if (!f) throw new Error('請選擇影片檔');
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('start_time', start); fd.append('end_time', end);
+      const res = await fetch('/api/jobs/video', { method: 'POST', body: fd });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    } else if (state.mode === 'audio') {
+      const f = $('audioFile').files[0];
+      if (!f) throw new Error('請選擇語音檔');
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('start_time', start); fd.append('end_time', end);
+      const res = await fetch('/api/jobs/audio', { method: 'POST', body: fd });
+      data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    } else {
+      const v = $('sysDevice').value;
+      data = await postJSON('/api/jobs/system-audio', { device_id: v === '' ? null : Number(v) });
+    }
+  } catch (e) {
+    state.busy = false; setControls('idle'); setBadge('idle');
+    showError(e.message || String(e));
+    return;
+  }
+  state.busy = false;
+  const jobId = data.job_id || data.jobId;
+  if (!jobId) { showError('建立 Job 失敗：無 job_id'); setControls('idle'); return; }
+  state.jobId = jobId;
+  setBadge('queued'); setControls('queued');
+  await pollOnce();
+  state.timer = setInterval(pollOnce, 1000);
+}
+
+async function pollOnce() {
+  if (!state.jobId) return;
+  let data;
+  try {
+    const res = await fetch('/api/jobs/' + encodeURIComponent(state.jobId));
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+  } catch (e) {
+    showError(e.message || String(e));
+    return;
+  }
+  if (data.error && !data.job_id && !data.status) { showError(data.error); return; }
+  const status = data.status || 'running';
+  setBadge(status); setControls(status);
+  // elapsed：以後端為準，絕不自行累加
+  $('elapsed').textContent = formatElapsed(data.elapsed_seconds);
+  const segs = data.current_segments || data.segments || [];
+  state.segments = Array.isArray(segs) ? segs : [];
+  const count = Number(data.segment_count ?? state.segments.length ?? 0);
+  $('segCount').textContent = String(count);
+  $('output').value = data.current_txt ?? state.segments.map((s) => s.text).join(',');
+  const terminal = (status === 'completed' || status === 'stopped' || status === 'failed');
+  if (status === 'failed' || data.error) showError(data.error || '');
+  if (status === 'completed' && count === 0) {
+    $('output').value = '(此擷取區間內無可用字幕或未偵測到語音)';
+  }
+  setDownloadsEnabled((status === 'completed' || status === 'stopped') && count > 0);
+  if (terminal && state.timer) { clearInterval(state.timer); state.timer = null; }
+}
+
+async function stopJob() {
+  if (!state.jobId) return;
+  try {
+    const res = await fetch('/api/jobs/' + encodeURIComponent(state.jobId) + '/stop', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    setBadge('stopping'); setControls('stopping');
+  } catch (e) {
+    showError(e.message || String(e));
+  }
+}
+
+// ---- 下載：由最終 segments 在前端產生 Blob ----
+function pad2(n) { return String(n).padStart(2, '0'); }
+function tsVtt(sec) {
+  const ms = Math.max(0, Math.round(Number(sec) * 1000));
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000),
+    s = Math.floor((ms % 60000) / 1000), x = ms % 1000;
+  return pad2(h) + ':' + pad2(m) + ':' + pad2(s) + '.' + String(x).padStart(3, '0');
+}
+function tsSrt(sec) { return tsVtt(sec).replace('.', ','); }
+function buildTxt(segs) { return segs.map((s) => s.text).join(','); }
+function buildVtt(segs) {
+  if (!segs.length) return 'WEBVTT\n\n';
+  return 'WEBVTT\n\n' + segs.map((s) => tsVtt(s.start) + ' --> ' + tsVtt(s.end) + '\n' + s.text + '\n').join('\n') + '\n';
+}
+function buildSrt(segs) {
+  if (!segs.length) return '';
+  return segs.map((s, i) => (i + 1) + '\n' + tsSrt(s.start) + ' --> ' + tsSrt(s.end) + '\n' + s.text + '\n').join('\n') + '\n';
+}
+function download(name, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+document.querySelectorAll('input[name="source"]').forEach((r) => {
+  r.addEventListener('change', (e) => switchMode(e.target.value));
+});
+$('startBtn').addEventListener('click', startJob);
+$('stopBtn').addEventListener('click', stopJob);
+$('reloadDevices').addEventListener('click', loadDevices);
+$('dlTxt').addEventListener('click', () => download('transcript.txt', buildTxt(state.segments)));
+$('dlVtt').addEventListener('click', () => download('transcript.vtt', buildVtt(state.segments)));
+$('dlSrt').addEventListener('click', () => download('transcript.srt', buildSrt(state.segments)));
+$('errorClose').addEventListener('click', hideError);
+
+setBadge('idle'); setControls('idle');
+</script>
+</body>
+</html>
