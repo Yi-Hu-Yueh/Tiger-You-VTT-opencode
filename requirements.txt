@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+yt-dlp
+webvtt-py
+faster-whisper
+ctranslate2
+av
+python-multipart
+httpx
+pyaudiowpatch
+pydantic-settings
